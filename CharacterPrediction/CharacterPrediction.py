@@ -33,7 +33,7 @@ def splitData(data, valSize = 0.1, testSize = 0.1):
 # TODO: MUST reduce size of numClasses. No need to use all 255 ascii values!!!!
 def loadData(path, timeSteps, timeShift):
 
-    convertToCTF(path, '', timeSteps, timeShift, (0,999))
+    convertToCTF(path, './data/Shakespeare', timeSteps, timeShift, (0,999))
     
     file    = open(path)
     lines   = file.readlines()[253:124437] # Skip the header lines in the Shakespeare file
@@ -144,6 +144,7 @@ def trainNetwork():
     learner = cntk.fsadagrad(model.parameters, lr=lr, minibatch_size=batchSize, momentum=0.9, unit_gain=True)
     trainer = cntk.Trainer(model, (loss, error), learner, [printer])
 
+    print('Parameters: {} \n'.format(cntk.logging.log_number_of_parameters(model)))
 
     for epoch in range(maxEpochs):
         for X1, Y1 in genBatch(X, Y, "train"):
