@@ -6,13 +6,13 @@ dir         = './text/'
 fileName    = 'Shakespeare.txt'
 
 
-timeSteps   = 5 # Can these by dynamic?
+timeSteps   = 15 # Can these by dynamic?
 timeShift   = 1 
 outputSize  = 1
 
 lr          = 0.02
-batchSize   = 64
-maxEpochs   = 100
+batchSize   = 256
+maxEpochs   = 5
 numClasses  = 255
 
 
@@ -25,6 +25,9 @@ def splitData(data, valSize = 0.1, testSize = 0.1):
 
 
     train, val, test = data[0:trainLen], data[trainLen:trainLen+valLen], data[trainLen+valLen:]
+    train   = cntk.one_hot(train, numClasses).eval()
+    val     = cntk.one_hot(val, numClasses).eval()
+    test    = cntk.one_hot(test, numClasses).eval()
 
     return {"train": train, "val": val, "test": test}
 
@@ -35,7 +38,7 @@ def loadData(path, timeSteps, timeShift):
     file.close()
 
     # Pair lines down more for expedient testing early on
-    lines = lines[0:1000]
+    lines = lines[0:5000]
     
     # Convert the character data into numbers
     data = []
@@ -56,7 +59,7 @@ def loadData(path, timeSteps, timeShift):
 
     Y = np.array(data[timeShift + timeSteps - 1 :])
 
-    return X, Y#splitData(X), splitData(Y)
+    return splitData(X), splitData(Y)
 
 def createNetwork(input):
 
@@ -78,16 +81,38 @@ def genBatch(X, Y, dataSet):
             part.append(data[i])
         return np.array(part)
 
-    for i in range(0, dataSize - batchSize, batchSize):
-        yield asBatch(X, i, batchSize), asBatch(Y, i, batchSize)
+    #for i in range(0, dataSize - batchSize, batchSize):
+    #    yield asBatch(X, i, batchSize), asBatch(Y, i, batchSize)
 
-    #for i in range(0, len(X[dataSet]) - batchSize, batchSize):
-    #    yield asBatch(X[dataSet], i, batchSize), asBatch(Y[dataSet], i, batchSize)
+    for i in range(0, len(X[dataSet]) - batchSize, batchSize):
+        yield asBatch(X[dataSet], i, batchSize), asBatch(Y[dataSet], i, batchSize)
 
 
 def printNetworkOuts(net):
+    test0 = 'Enter Hello fr'
+    test1 = 'five Low, fiv'
+
+    def strToNums(str):
+        lst = []
+        for c in str:
+            lst.append(ord(c))
+        return cntk.one_hot(np.array(lst), numClasses).eval()
+
+    t0, t1 = strToNums(test0), strToNums(test1)
+
+    t0Out = net(t0)
+    t1Out = net(t1)
+    
+    t0 = np.argmax(t0Out)
+    t1 = np.argmax(t1Out)
+
+    # Print
+    print('1:', chr(t0))
+    print('2:', chr(t1))
 
     return
+
+
 
 # TODO: Look into Attention based models 
 # i.e. something like cntk.layers.attention
@@ -102,12 +127,9 @@ def trainNetwork():
 
     X, Y    = loadData(dir + fileName, timeSteps, timeShift)
 
-    X = cntk.one_hot(X, numClasses).eval()
-    Y = cntk.one_hot(Y, numClasses).eval()
-
     model   = createNetwork(input)
-
     label   = cntk.input_variable(numClasses, dynamic_axes=model.dynamic_axes, name='label')
+
 
     loss    = cntk.cross_entropy_with_softmax(model, label) #cntk.squared_error(model, label)
     error   = cntk.cross_entropy_with_softmax(model, label) #cntk.squared_error(model, label)
@@ -120,7 +142,15 @@ def trainNetwork():
     for epoch in range(maxEpochs):
         for X1, Y1 in genBatch(X, Y, "train"):
             trainer.train_minibatch({input: X1, label: Y1})
+        
         print("epoch: {}, loss: {:.3f}".format(epoch, trainer.previous_minibatch_loss_average))
+        
+        valError = 0
+        for X1, Y1 in genBatch(X, Y, "val"):
+            valError += trainer.test_minibatch({input: X1, label: Y1})
+        print("Validation - mse: {}".format(valError / len(X["val"])))
+
+    printNetworkOuts(model)
 
     
 
