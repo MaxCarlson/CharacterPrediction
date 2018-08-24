@@ -70,17 +70,24 @@ def createNetwork(input):
 def genBatch(X, Y, dataSet):
     # TODO: Need to look into randomizing the data's order
 
+    dataSize = len(X)
+
     def asBatch(data, start, count):
         part = []
         for i in range(start, start+count):
             part.append(data[i])
         return np.array(part)
 
-    for i in range(0, len(X) - batchSize, batchSize):
+    for i in range(0, dataSize - batchSize, batchSize):
         yield asBatch(X, i, batchSize), asBatch(Y, i, batchSize)
 
     #for i in range(0, len(X[dataSet]) - batchSize, batchSize):
     #    yield asBatch(X[dataSet], i, batchSize), asBatch(Y[dataSet], i, batchSize)
+
+
+def printNetworkOuts(net):
+
+    return
 
 # TODO: Look into Attention based models 
 # i.e. something like cntk.layers.attention
@@ -95,8 +102,8 @@ def trainNetwork():
 
     X, Y    = loadData(dir + fileName, timeSteps, timeShift)
 
-    X = cntk.one_hot(X, numClasses)
-    Y = cntk.one_hot(Y, numClasses)
+    X = cntk.one_hot(X, numClasses).eval()
+    Y = cntk.one_hot(Y, numClasses).eval()
 
     model   = createNetwork(input)
 
@@ -107,12 +114,12 @@ def trainNetwork():
     printer = cntk.logging.ProgressPrinter(tag='Training', num_epochs=maxEpochs)   
 
     learner = cntk.fsadagrad(model.parameters, lr=lr, minibatch_size=batchSize, momentum=0.9, unit_gain=True)
-    trainer = cntk.Trainer(model, (loss, error), [learner, printer])
+    trainer = cntk.Trainer(model, (loss, error), learner, [printer])
 
 
     for epoch in range(maxEpochs):
         for X1, Y1 in genBatch(X, Y, "train"):
-            trainer.train_minibatch({X: X1, Y: Y1})
+            trainer.train_minibatch({input: X1, label: Y1})
         print("epoch: {}, loss: {:.3f}".format(epoch, trainer.previous_minibatch_loss_average))
 
     
