@@ -1,16 +1,14 @@
 import cntk
 import numpy as np
 
-
 dir         = './text/'
 fileName    = 'Shakespeare.txt'
 
-
-timeSteps   = 15 # Can these by dynamic?
+timeSteps   = 50
 timeShift   = 1 
 outputSize  = 1
 
-lr          = 0.02
+lr          = 0.035
 batchSize   = 256
 maxEpochs   = 5
 numClasses  = 255
@@ -25,12 +23,13 @@ def splitData(data, valSize = 0.1, testSize = 0.1):
 
 
     train, val, test = data[0:trainLen], data[trainLen:trainLen+valLen], data[trainLen+valLen:]
-    train   = cntk.one_hot(train, numClasses).eval()
+    train   = cntk.one_hot(train, numClasses).eval(device=cntk.cpu()) # For the moment this gets around the memory limitation thrown up by my GPU, but we really need to generate this data beforehand!
     val     = cntk.one_hot(val, numClasses).eval()
     test    = cntk.one_hot(test, numClasses).eval()
 
     return {"train": train, "val": val, "test": test}
 
+# TODO: MUST reduce size of numClasses. No need to use all 255 ascii values!!!!
 def loadData(path, timeSteps, timeShift):
     
     file    = open(path)
@@ -88,9 +87,10 @@ def genBatch(X, Y, dataSet):
         yield asBatch(X[dataSet], i, batchSize), asBatch(Y[dataSet], i, batchSize)
 
 
-def printNetworkOuts(net):
-    test0 = 'Enter Hello fr'
-    test1 = 'five Low, fiv'
+def generateText(net):
+
+    seqLen  = 100
+    seedSeq = 'ENTER: '
 
     def strToNums(str):
         lst = []
@@ -98,18 +98,21 @@ def printNetworkOuts(net):
             lst.append(ord(c))
         return cntk.one_hot(np.array(lst), numClasses).eval()
 
-    t0, t1 = strToNums(test0), strToNums(test1)
+    seq         = seedSeq
+    masterSeq   = seedSeq
 
-    t0Out = net(t0)
-    t1Out = net(t1)
-    
-    t0 = np.argmax(t0Out)
-    t1 = np.argmax(t1Out)
+    for i in range(seqLen):
+        out          = net(strToNums(seq))
+        digit        = np.argmax(out)
+        masterSeq   += chr(digit)
+        seq         += chr(digit)
 
-    # Print
-    print('1:', chr(t0))
-    print('2:', chr(t1))
+        if len(seq) >= timeSteps:
+            seq = seq[1:]
 
+
+    print('Seed Sequence: {}'.format(seedSeq))
+    print('Output: {}'.format(masterSeq))
     return
 
 
@@ -150,7 +153,7 @@ def trainNetwork():
             valError += trainer.test_minibatch({input: X1, label: Y1})
         print("Validation - mse: {}".format(valError / len(X["val"])))
 
-    printNetworkOuts(model)
+    generateText(model)
 
     
 
