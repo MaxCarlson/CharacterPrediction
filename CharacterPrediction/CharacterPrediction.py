@@ -1,5 +1,6 @@
 import cntk
 import numpy as np
+from CtfConverter import convertToCTF
 
 dir         = './text/'
 fileName    = 'Shakespeare.txt'
@@ -31,6 +32,8 @@ def splitData(data, valSize = 0.1, testSize = 0.1):
 
 # TODO: MUST reduce size of numClasses. No need to use all 255 ascii values!!!!
 def loadData(path, timeSteps, timeShift):
+
+    convertToCTF(path, '', timeSteps, timeShift, (0,999))
     
     file    = open(path)
     lines   = file.readlines()[253:124437] # Skip the header lines in the Shakespeare file
