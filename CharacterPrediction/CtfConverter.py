@@ -50,6 +50,20 @@ class CharMappings():
     def __len__(self):
         return self.len
 
+def writeToFile(dest, length, timeSteps, timeShift, data, setName, featName, labelName):
+    
+    file = open(dest + '_' + setName + '.ctf', "w+")
+
+    Y = np.array(data[timeShift + timeSteps - 1 :])
+
+
+    # Create and save file containing features and labels
+    # in CTF format with custom mappings
+    for i in range(length - timeSteps - timeShift + 1):
+        file.write(featName + '| ' + str(data[i:i + timeSteps]).replace(',', '')[1:-1] + ' ')
+        file.write(labelName + '| ' + str(data[timeShift + timeSteps + i - 1]).replace(',',''))
+
+        file.write('\n')
 
 def convertToCTF(filePath, dest, timeSteps, timeShift, lineShape, split = [0.8, 0.1, 0.1], excludeChars = {}):
 
@@ -60,7 +74,6 @@ def convertToCTF(filePath, dest, timeSteps, timeShift, lineShape, split = [0.8, 
     # Create and save custom character mapper
     mapper  = CharMappings(lines, dest, excludeChars)
 
-    file    = open(dest + '.txt', "w+")
 
     # Convert to custom mapping array
     # TODO: If file is too large for memory this won't work
@@ -69,10 +82,15 @@ def convertToCTF(filePath, dest, timeSteps, timeShift, lineShape, split = [0.8, 
         for c in l:
             data.append(mapper.toNum(c))
 
-    # Create and save file containing features and labels
-    # in CTF format with custom mappings
-    for i in range(len(mapper) - timeSteps - timeShift + 1):
-        file.write('X|'+'')
+    # Create sepperate files for training, test
+    # and validation datasets
+    trainLen = int(len(data) * split[0])
+    validLen = int(len(data) * split[1])
+    testLen  = int(len(data) * split[2])
+
+    writeToFile(dest, trainLen, timeSteps, timeShift, data[0:trainLen],                 'train',      'X', 'Y')
+    writeToFile(dest, validLen, timeSteps, timeShift, data[trainLen:trainLen+validLen], 'validation', 'X', 'Y')
+    writeToFile(dest,  testLen, timeSteps, timeShift, data[trainLen+validLen: ],        'test',       'X', 'Y')
 
     return
 
