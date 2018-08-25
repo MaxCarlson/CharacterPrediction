@@ -63,15 +63,15 @@ def loadData(path, timeSteps, timeShift):
 
 def createReader(path, isTraining, inputDim, numClasses):
 
-    featureStream = cntk.io.StreamDef(field='X', shape=inputDim,   is_sparse=False)
-    labelStream   = cntk.io.StreamDef(field='Y', shape=numClasses, is_sparse=False)
+    featureStream = cntk.io.StreamDef(field='X', shape=inputDim,   is_sparse=True)
+    labelStream   = cntk.io.StreamDef(field='Y', shape=numClasses, is_sparse=True)
 
     deserializer = cntk.io.CTFDeserializer(path, cntk.io.StreamDefs(features = featureStream, labels = labelStream))
 
     return cntk.io.MinibatchSource(deserializer, randomize=isTraining, 
                                    max_sweeps=cntk.io.INFINITELY_REPEAT if isTraining else 1)
 
-def createNetwork(input):
+def createNetwork(input, numClasses):
 
     with cntk.layers.default_options(initial_state = 0.1):
         n = cntk.layers.Recurrence(cntk.layers.LSTM(timeSteps))(input)
@@ -138,7 +138,7 @@ def trainNetwork():
     #xAxes = [cntk.Axis.default_batch_axis(), cntk.Axis.default_dynamic_axis()]
     #input = cntk.input_variable(1, dynamic_axes=xAxes)
 
-    convertToCTF(path, './data/Shakespeare', timeSteps, timeShift, (0,999))
+    #convertToCTF(dir + fileName, './data/Shakespeare', timeSteps, timeShift, (253,50000))
 
     # TODO: Change mappings to .bin files
     mapper  = CharMappings(loc='./data/Shakespeare', load=True)
@@ -147,31 +147,52 @@ def trainNetwork():
 
     #X, Y    = loadData(dir + fileName, timeSteps, timeShift)
 
-    model   = createNetwork(input)
+    model   = createNetwork(input, mapper.numClasses)
     label   = cntk.input_variable(mapper.numClasses, dynamic_axes=model.dynamic_axes, name='label')
 
     trainingReader = createReader('./data/Shakespeare_train.ctf', True, mapper.numClasses, mapper.numClasses)
     inputMap = {input: trainingReader.streams.features, label: trainingReader.streams.labels }
-    numSamplesPerSweep = 60000
-    sweepsToTrain = 10
 
-
-    loss    = cntk.cross_entropy_with_softmax(model, label) #cntk.squared_error(model, label)
-    error   = cntk.cross_entropy_with_softmax(model, label) #cntk.squared_error(model, label)
+    loss    = cntk.cross_entropy_with_softmax(model, label) 
+    error   = cntk.cross_entropy_with_softmax(model, label) 
     printer = cntk.logging.ProgressPrinter(tag='Training', num_epochs=maxEpochs)   
 
     learner = cntk.fsadagrad(model.parameters, lr=lr, minibatch_size=batchSize, momentum=0.9, unit_gain=True)
     trainer = cntk.Trainer(model, (loss, error), learner, [printer])
 
-    print('Parameters: {} \n'.format(cntk.logging.log_number_of_parameters(model)))
+    cntk.logging.log_number_of_parameters(model)
 
-    cntk.train.training_session(
-        trainer=trainer,
-        mb_source=trainingReader,
-        mb_size=batchSize,
-        model_inputs_to_streams=inputMap,
-        max_samples=numSamplesPerSweep * sweepsToTrain,
-        ).train()
+    #cntk.train.training_session(
+    #    trainer=trainer,
+    #    mb_source=trainingReader,
+    #    mb_size=batchSize,
+    #    model_inputs_to_streams=inputMap,
+    #    max_samples=maxEpochs * mapper.samples * 100
+    #    ).train()
+
+    numMinibatch = mapper.samples // batchSize
+
+    for epoch in range(maxEpochs):
+        #trainer.train_minibatch(inputMap)
+        for m in range(numMinibatch):
+            data = trainingReader.next_minibatch(batchSize, input_map=inputMap)
+            trainer.train_minibatch(data)
+
+        print("epoch: {}, loss: {:.3f}".format(epoch, trainer.previous_minibatch_loss_average))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     for epoch in range(maxEpochs):
         for X1, Y1 in genBatch(X, Y, "train"):

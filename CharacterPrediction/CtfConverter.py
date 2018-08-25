@@ -14,7 +14,7 @@ class CharMappings():
         self.charToInt  = dict()
         self.intToChar  = dict()
         self.numClasses = 0
-        self.len        = 0
+        self.samples    = 0
         
         if lines:
             self.mapChars(lines)
@@ -29,7 +29,7 @@ class CharMappings():
                 if c not in self.charToInt and c not in self.exclude: 
                     self.charToInt[c] = i
                     i += 1
-                self.len += 1
+                self.samples += 1
 
         for k, v in self.charToInt.items():
             self.intToChar[v] = k
@@ -49,9 +49,9 @@ class CharMappings():
         self.__dict__.update(l.__dict__)
 
     def __len__(self):
-        return self.len
+        return self.samples
 
-def writeToFile(dest, length, timeSteps, timeShift, data, setName, featName, labelName):
+def writeToFile(dest, mapper, length, timeSteps, timeShift, data, setName, featName, labelName):
     
     file = open(dest + '_' + setName + '.ctf', "w+")
 
@@ -61,8 +61,14 @@ def writeToFile(dest, length, timeSteps, timeShift, data, setName, featName, lab
     # Create and save file containing features and labels
     # in CTF format with custom mappings
     for i in range(length - timeSteps - timeShift + 1):
-        file.write(featName + '| ' + str(data[i:i + timeSteps]).replace(',', '')[1:-1] + ' ')
-        file.write(labelName + '| ' + str(data[timeShift + timeSteps + i - 1]).replace(',',''))
+        fStr = str(data[i:i + timeSteps]).replace(',', '')[1:-1] + ' '
+        fStr = fStr.replace(' ', ':1 ')
+
+        lStr = str(data[timeShift + timeSteps + i - 1]).replace(',','') + ':1'
+
+
+        file.write('|' + featName  + ' ' + fStr)
+        file.write('|' + labelName + ' ' + lStr)
 
         file.write('\n')
 
@@ -74,7 +80,6 @@ def convertToCTF(filePath, dest, timeSteps, timeShift, lineShape, split = [0.8, 
 
     # Create and save custom character mapper
     mapper  = CharMappings(lines, dest, excludeChars)
-
 
     # Convert to custom mapping array
     # TODO: If file is too large for memory this won't work
@@ -89,11 +94,9 @@ def convertToCTF(filePath, dest, timeSteps, timeShift, lineShape, split = [0.8, 
     validLen = int(len(data) * split[1])
     testLen  = int(len(data) * split[2])
 
-    writeToFile(dest, trainLen, timeSteps, timeShift, data[0:trainLen],                 'train',      'X', 'Y')
-    writeToFile(dest, validLen, timeSteps, timeShift, data[trainLen:trainLen+validLen], 'validation', 'X', 'Y')
-    writeToFile(dest,  testLen, timeSteps, timeShift, data[trainLen+validLen: ],        'test',       'X', 'Y')
-
-    return
+    writeToFile(dest, mapper, trainLen, timeSteps, timeShift, data[0:trainLen],                 'train',      'X', 'Y')
+    writeToFile(dest, mapper, validLen, timeSteps, timeShift, data[trainLen:trainLen+validLen], 'validation', 'X', 'Y')
+    writeToFile(dest, mapper, testLen,  timeSteps, timeShift, data[trainLen+validLen: ],        'test',       'X', 'Y')
 
 
 def splitData(data, valSize = 0.1, testSize = 0.1):
