@@ -42,10 +42,11 @@ class CharMappings():
         return self.intToChar[nm]
 
     def save(self):
-        pickstr = pickle.dump(self, open(self.loc + '_map.txt', "wb"))
+        pickle.dump(self, open(self.loc + '_map.bin', "wb"))
 
     def load(self):
-        self = copy.copy(pickle.load(open(self.loc +'_map.txt', "rb")))
+        l = pickle.load(open('./data/Shakespeare_map.bin', "rb"))
+        self.__dict__.update(l.__dict__)
 
     def __len__(self):
         return self.len

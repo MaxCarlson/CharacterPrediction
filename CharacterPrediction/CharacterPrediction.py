@@ -1,6 +1,6 @@
 import cntk
 import numpy as np
-from CtfConverter import convertToCTF
+from CtfConverter import CharMappings, convertToCTF
 
 dir         = './text/'
 fileName    = 'Shakespeare.txt'
@@ -32,8 +32,6 @@ def splitData(data, valSize = 0.1, testSize = 0.1):
 
 # TODO: MUST reduce size of numClasses. No need to use all 255 ascii values!!!!
 def loadData(path, timeSteps, timeShift):
-
-    convertToCTF(path, './data/Shakespeare', timeSteps, timeShift, (0,999))
     
     file    = open(path)
     lines   = file.readlines()[253:124437] # Skip the header lines in the Shakespeare file
@@ -62,6 +60,16 @@ def loadData(path, timeSteps, timeShift):
     Y = np.array(data[timeShift + timeSteps - 1 :])
 
     return splitData(X), splitData(Y)
+
+def createReader(path, isTraining, inputDim, numClasses):
+
+    featureStream = cntk.io.StreamDef(field='X', shape=inputDim,   is_sparse=False)
+    labelStream   = cntk.io.StreamDef(field='Y', shape=numClasses, is_sparse=False)
+
+    deserializer = cntk.io.CTFDeserializer(path, cntk.io.StreamDefs(features = featureStream, labels = labelStream))
+
+    return cntk.io.MinibatchSource(deserializer, randomize=isTraining, 
+                                   max_sweeps=cntk.io.INFINITELY_REPEAT if isTraining else 1)
 
 def createNetwork(input):
 
@@ -129,12 +137,23 @@ def trainNetwork():
     
     #xAxes = [cntk.Axis.default_batch_axis(), cntk.Axis.default_dynamic_axis()]
     #input = cntk.input_variable(1, dynamic_axes=xAxes)
-    input   = cntk.sequence.input_variable(numClasses)
 
-    X, Y    = loadData(dir + fileName, timeSteps, timeShift)
+    convertToCTF(path, './data/Shakespeare', timeSteps, timeShift, (0,999))
+
+    # TODO: Change mappings to .bin files
+    mapper  = CharMappings(loc='./data/Shakespeare', load=True)
+
+    input   = cntk.sequence.input_variable(mapper.numClasses)
+
+    #X, Y    = loadData(dir + fileName, timeSteps, timeShift)
 
     model   = createNetwork(input)
-    label   = cntk.input_variable(numClasses, dynamic_axes=model.dynamic_axes, name='label')
+    label   = cntk.input_variable(mapper.numClasses, dynamic_axes=model.dynamic_axes, name='label')
+
+    trainingReader = createReader('./data/Shakespeare_train.ctf', True, mapper.numClasses, mapper.numClasses)
+    inputMap = {input: trainingReader.streams.features, label: trainingReader.streams.labels }
+    numSamplesPerSweep = 60000
+    sweepsToTrain = 10
 
 
     loss    = cntk.cross_entropy_with_softmax(model, label) #cntk.squared_error(model, label)
@@ -145,6 +164,14 @@ def trainNetwork():
     trainer = cntk.Trainer(model, (loss, error), learner, [printer])
 
     print('Parameters: {} \n'.format(cntk.logging.log_number_of_parameters(model)))
+
+    cntk.train.training_session(
+        trainer=trainer,
+        mb_source=trainingReader,
+        mb_size=batchSize,
+        model_inputs_to_streams=inputMap,
+        max_samples=numSamplesPerSweep * sweepsToTrain,
+        ).train()
 
     for epoch in range(maxEpochs):
         for X1, Y1 in genBatch(X, Y, "train"):
