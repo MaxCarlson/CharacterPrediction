@@ -8,11 +8,15 @@ from CtfConverter import CharMappings
 def generator(batchSize, timeSteps, mapper, dest, dataName):
 
     data    = np.loadtxt(dest + '_' + dataName + '.ctf', delimiter=' ')
-    X       = data[:, 0:timeSteps-1]
+    X       = data[:, 0:timeSteps]
     Y       = data[:, timeSteps:]
+
+    X = cntk.one_hot(X, mapper.numClasses).eval()
+    Y = cntk.one_hot(Y, mapper.numClasses).eval()
 
     size = len(X)
     while True:
+        # TODO: Need edge checking here!!!!!!!
         start   = rng.randint(0, size)
         end     = start + batchSize
 
@@ -20,7 +24,7 @@ def generator(batchSize, timeSteps, mapper, dest, dataName):
 
 def writeToFile(dest, mapper, length, timeSteps, timeShift, data, dataName):
 
-    file    = open(dest + '_' + dataName + '.ctf', "w+")
+    file = open(dest + '_' + dataName + '.ctf', "w+")
 
     # File format is:
     # All numbers on a line except the last are the input (in non-sparse format), 
@@ -44,7 +48,7 @@ def loadData(filePath, dest, batchSize, timeSteps, timeShift, load=False, lineSh
     file.close()
 
     mapper = None
-    if load:
+    if load == False:
         mapper  = CharMappings(lines, dest)
 
         data = []
