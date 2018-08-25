@@ -14,52 +14,6 @@ batchSize   = 256
 maxEpochs   = 5
 numClasses  = 255
 
-
-def splitData(data, mapper, valSize = 0.1, testSize = 0.1):
-
-    length      = len(data)
-    trainLen    = int((1.0 - valSize - testSize) * length)
-    valLen      = int(valSize  * length)
-    testLen     = int(testSize * length)
-
-
-    train, val, test = data[0:trainLen], data[trainLen:trainLen+valLen], data[trainLen+valLen:]
-    train   = cntk.one_hot(train, mapper.numClasses).eval(device=cntk.cpu()) # For the moment this gets around the memory limitation thrown up by my GPU, but we really need to generate this data beforehand!
-    val     = cntk.one_hot(val, mapper.numClasses).eval()
-    test    = cntk.one_hot(test, mapper.numClasses).eval()
-
-    return {"train": train, "val": val, "test": test}
-
-def loadData(path, mapper, timeSteps, timeShift):
-    
-    file    = open(path)
-    lines   = file.readlines()[253:124437] # Skip the header lines in the Shakespeare file
-    file.close()
-
-    # Pair lines down more for expedient testing early on
-    lines = lines[0:1000]
-    
-    # Convert the character data into numbers
-    data = []
-    for l in lines:
-        for c in l:
-            data.append(mapper.toNum(c))
-    
-    a = len(data)
-    
-    X = []
-    Y = []
-
-    # Create our inputs. Make sure they're within realistic bounds
-    for i in range(len(data) - timeSteps - timeShift + 1):
-        X.append(np.array(data[i:i + timeSteps]))
-
-    X = np.array(X)
-
-    Y = np.array(data[timeShift + timeSteps - 1 :])
-
-    return splitData(X, mapper), splitData(Y, mapper)
-
 def createReader(path, isTraining, inputDim, numClasses):
 
     featureStream = cntk.io.StreamDef(field='X', shape=numClasses, is_sparse=True)
@@ -125,7 +79,7 @@ def generateText(net):
     print('Output: {}'.format(masterSeq))
     return
 
-
+from DataReader import loadData
 
 # TODO: Look into Attention based models 
 # i.e. something like cntk.layers.attention
@@ -137,15 +91,16 @@ def trainNetwork():
     
 
     #convertToCTF(dir + fileName, './data/Shakespeare', timeSteps, timeShift, (253,5000))
+    data = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, (253,5000))
 
     mapper  = CharMappings(loc='./data/Shakespeare', load=True)
 
     # Input with dynamic sequence axis 
     # consisting of numClasses length one-hot vectors
-    #inputSeqAxis = cntk.Axis('inputAxis')
-    #input   = cntk.sequence.input_variable(mapper.numClasses, sequence_axis=inputSeqAxis, name='input')
+    inputSeqAxis = cntk.Axis('inputAxis')
+    input   = cntk.sequence.input_variable(mapper.numClasses, sequence_axis=inputSeqAxis, name='input')
 
-    input   = cntk.sequence.input_variable(mapper.numClasses, name='input')
+    #input   = cntk.sequence.input_variable(mapper.numClasses, is_sparse=True, name='input')
 
     model   = createNetwork(input, mapper.numClasses) 
 
@@ -176,6 +131,12 @@ def trainNetwork():
     #    max_samples=maxEpochs * mapper.samples * 100
     #    ).train()
 
+    #X, Y   = loadData(dir + fileName, mapper, timeSteps, timeShift)
+    #X1, Y1 = next(genBatch(X, Y, "test"))
+    #outs   = model(X1)
+    #outsA  = np.argmax(outs, 1)
+    #res    = np.argmax(Y1, 1)
+
     ls = []
     er = []
     for epoch in range(maxEpochs):
@@ -187,11 +148,7 @@ def trainNetwork():
 
         trainer.summarize_training_progress()
 
-        X, Y   = loadData(dir + fileName, mapper, timeSteps, timeShift)
-        X1, Y1 = next(genBatch(X, Y, "test"))
-        outs   = model(X1)
-        outsA  = np.argmax(outs, 1)
-        res    = np.argmax(Y1, 1)
+
 
         result = sum(outsA == res)
 
