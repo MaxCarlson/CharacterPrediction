@@ -1,13 +1,22 @@
 import cntk
 import numpy as np
+import random as rng
 from CtfConverter import CharMappings
 
 # TODO: Add support for files too big for memory if needed!
-def generator(batchSize, mapper, dest, dataName):
-    file = open(dest + '_' + dataName + '.ctf', "r")
+# TODO: Add in more randomized method of picking than just random start  points
+def generator(batchSize, timeSteps, mapper, dest, dataName):
 
+    data    = np.loadtxt(dest + '_' + dataName + '.ctf', delimiter=' ')
+    X       = data[:, 0:timeSteps-1]
+    Y       = data[:, timeSteps:]
 
-    pass
+    size = len(X)
+    while True:
+        start   = rng.randint(0, size)
+        end     = start + batchSize
+
+        yield X[start:end], Y[start:end]
 
 def writeToFile(dest, mapper, length, timeSteps, timeShift, data, dataName):
 
@@ -29,28 +38,32 @@ def writeToFile(dest, mapper, length, timeSteps, timeShift, data, dataName):
 
     return
 
-def loadData(filePath, dest, batchSize, timeSteps, timeShift, lineShape = [0,-1], split = [0.90, 0.1]):
+def loadData(filePath, dest, batchSize, timeSteps, timeShift, load=False, lineShape = [0,-1], split = [0.90, 0.1]):
     file    = open(filePath, "r")
     lines   = file.readlines()[lineShape[0]:lineShape[1]]
     file.close()
 
-    mapper  = CharMappings(lines, dest)
+    mapper = None
+    if load:
+        mapper  = CharMappings(lines, dest)
 
-    data = []
-    for l in lines:
-        for c in l:
-            data.append(mapper.toNum(c))
+        data = []
+        for l in lines:
+            for c in l:
+                data.append(mapper.toNum(c))
 
-    # Create sepperate files for 
-    # training and validation datasets
-    trainLen = int(len(data) * split[0])
-    validLen = int(len(data) * split[1])
+        # Create sepperate files for 
+        # training and validation datasets
+        trainLen = int(len(data) * split[0])
+        validLen = int(len(data) * split[1])
 
-    writeToFile(dest, mapper, trainLen, timeSteps, timeShift, data[0:trainLen], 'train')
-    writeToFile(dest, mapper, validLen, timeSteps, timeShift, data[trainLen: ], 'validation')
+        writeToFile(dest, mapper, trainLen, timeSteps, timeShift, data[0:trainLen], 'train')
+        writeToFile(dest, mapper, validLen, timeSteps, timeShift, data[trainLen: ], 'validation')
+    else:
+        mapper = CharMappings(loc=dest, load=True)
 
 
-    gen = { generator(batchSize, mapper, dest, 'train'), 
-            generator(batchSize, mapper, dest, 'validation') }
+    gens = { 'train': generator(batchSize, timeSteps, mapper, dest, 'train'), 
+            'validation': generator(batchSize, timeSteps, mapper, dest, 'validation') }
 
-    return mapper, gen
+    return mapper, gens

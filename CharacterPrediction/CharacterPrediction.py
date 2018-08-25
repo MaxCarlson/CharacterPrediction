@@ -91,9 +91,9 @@ def trainNetwork():
     
 
     #convertToCTF(dir + fileName, './data/Shakespeare', timeSteps, timeShift, (253,5000))
-    data = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, (253,5000))
+    mapper, gens = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, True, (253,500))
 
-    mapper  = CharMappings(loc='./data/Shakespeare', load=True)
+    #mapper  = CharMappings(loc='./data/Shakespeare', load=True)
 
     # Input with dynamic sequence axis 
     # consisting of numClasses length one-hot vectors
@@ -109,8 +109,8 @@ def trainNetwork():
 
     #z       = model(input)
 
-    trainingReader  = createReader('./data/Shakespeare_train.ctf', True, timeSteps, mapper.numClasses)
-    inputMap        = { input: trainingReader.streams.features, label: trainingReader.streams.labels }
+    #trainingReader  = createReader('./data/Shakespeare_train.ctf', True, timeSteps, mapper.numClasses)
+    #inputMap        = { input: trainingReader.streams.features, label: trainingReader.streams.labels }
 
     loss    = cntk.cross_entropy_with_softmax(model, label) 
     error   = cntk.cross_entropy_with_softmax(model, label) 
@@ -122,6 +122,13 @@ def trainNetwork():
     cntk.logging.log_number_of_parameters(model)
 
     numMinibatch = mapper.samples // batchSize
+
+
+    for epoch in range(maxEpochs):
+        for mb in range(numMinibatch):
+            X, Y = next(gens['train'])
+            trainer.train_minibatch({ model.arguments[0]: X, label: Y })
+        trainer.summarize_training_progress()
 
     #cntk.train.training_session(
     #    trainer=trainer,
