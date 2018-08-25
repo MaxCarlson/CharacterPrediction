@@ -15,7 +15,7 @@ maxEpochs   = 5
 numClasses  = 255
 
 
-def splitData(data, valSize = 0.1, testSize = 0.1):
+def splitData(data, mapper, valSize = 0.1, testSize = 0.1):
 
     length      = len(data)
     trainLen    = int((1.0 - valSize - testSize) * length)
@@ -24,27 +24,26 @@ def splitData(data, valSize = 0.1, testSize = 0.1):
 
 
     train, val, test = data[0:trainLen], data[trainLen:trainLen+valLen], data[trainLen+valLen:]
-    train   = cntk.one_hot(train, numClasses).eval(device=cntk.cpu()) # For the moment this gets around the memory limitation thrown up by my GPU, but we really need to generate this data beforehand!
-    val     = cntk.one_hot(val, numClasses).eval()
-    test    = cntk.one_hot(test, numClasses).eval()
+    train   = cntk.one_hot(train, mapper.numClasses).eval(device=cntk.cpu()) # For the moment this gets around the memory limitation thrown up by my GPU, but we really need to generate this data beforehand!
+    val     = cntk.one_hot(val, mapper.numClasses).eval()
+    test    = cntk.one_hot(test, mapper.numClasses).eval()
 
     return {"train": train, "val": val, "test": test}
 
-# TODO: MUST reduce size of numClasses. No need to use all 255 ascii values!!!!
-def loadData(path, timeSteps, timeShift):
+def loadData(path, mapper, timeSteps, timeShift):
     
     file    = open(path)
     lines   = file.readlines()[253:124437] # Skip the header lines in the Shakespeare file
     file.close()
 
     # Pair lines down more for expedient testing early on
-    lines = lines[0:5000]
+    lines = lines[0:1000]
     
     # Convert the character data into numbers
     data = []
     for l in lines:
         for c in l:
-            data.append(ord(c))
+            data.append(mapper.toNum(c))
     
     a = len(data)
     
@@ -59,11 +58,11 @@ def loadData(path, timeSteps, timeShift):
 
     Y = np.array(data[timeShift + timeSteps - 1 :])
 
-    return splitData(X), splitData(Y)
+    return splitData(X, mapper), splitData(Y, mapper)
 
 def createReader(path, isTraining, inputDim, numClasses):
 
-    featureStream = cntk.io.StreamDef(field='X', shape=inputDim,   is_sparse=True)
+    featureStream = cntk.io.StreamDef(field='X', shape=numClasses, is_sparse=True)
     labelStream   = cntk.io.StreamDef(field='Y', shape=numClasses, is_sparse=True)
 
     deserializer = cntk.io.CTFDeserializer(path, cntk.io.StreamDefs(features = featureStream, labels = labelStream))
@@ -135,23 +134,28 @@ def generateText(net):
 #
 def trainNetwork():
     
-    #xAxes = [cntk.Axis.default_batch_axis(), cntk.Axis.default_dynamic_axis()]
-    #input = cntk.input_variable(1, dynamic_axes=xAxes)
+    
 
-    #convertToCTF(dir + fileName, './data/Shakespeare', timeSteps, timeShift, (253,50000))
+    #convertToCTF(dir + fileName, './data/Shakespeare', timeSteps, timeShift, (253,5000))
 
-    # TODO: Change mappings to .bin files
     mapper  = CharMappings(loc='./data/Shakespeare', load=True)
 
-    input   = cntk.sequence.input_variable(mapper.numClasses)
+    # Input with dynamic sequence axis 
+    # consisting of numClasses length one-hot vectors
+    #inputSeqAxis = cntk.Axis('inputAxis')
+    #input   = cntk.sequence.input_variable(mapper.numClasses, sequence_axis=inputSeqAxis, name='input')
 
-    #X, Y    = loadData(dir + fileName, timeSteps, timeShift)
+    input   = cntk.sequence.input_variable(mapper.numClasses, name='input')
 
-    model   = createNetwork(input, mapper.numClasses)
-    label   = cntk.input_variable(mapper.numClasses, dynamic_axes=model.dynamic_axes, name='label')
+    model   = createNetwork(input, mapper.numClasses) 
 
-    trainingReader = createReader('./data/Shakespeare_train.ctf', True, mapper.numClasses, mapper.numClasses)
-    inputMap = {input: trainingReader.streams.features, label: trainingReader.streams.labels }
+    label   = cntk.input_variable(mapper.numClasses, dynamic_axes=model.dynamic_axes, name='label') 
+    #label   = cntk.sequence.input_variable(mapper.numClasses, sequence_axis=inputSeqAxis,  name='label') 
+
+    #z       = model(input)
+
+    trainingReader  = createReader('./data/Shakespeare_train.ctf', True, timeSteps, mapper.numClasses)
+    inputMap        = { input: trainingReader.streams.features, label: trainingReader.streams.labels }
 
     loss    = cntk.cross_entropy_with_softmax(model, label) 
     error   = cntk.cross_entropy_with_softmax(model, label) 
@@ -162,6 +166,8 @@ def trainNetwork():
 
     cntk.logging.log_number_of_parameters(model)
 
+    numMinibatch = mapper.samples // batchSize
+
     #cntk.train.training_session(
     #    trainer=trainer,
     #    mb_source=trainingReader,
@@ -170,40 +176,35 @@ def trainNetwork():
     #    max_samples=maxEpochs * mapper.samples * 100
     #    ).train()
 
-    numMinibatch = mapper.samples // batchSize
-
+    ls = []
+    er = []
     for epoch in range(maxEpochs):
-        #trainer.train_minibatch(inputMap)
-        for m in range(numMinibatch):
+        for mb in range(numMinibatch):
             data = trainingReader.next_minibatch(batchSize, input_map=inputMap)
             trainer.train_minibatch(data)
+            ls.append(trainer.previous_minibatch_loss_average)
+            er.append(trainer.previous_minibatch_evaluation_average)
+
+        trainer.summarize_training_progress()
+
+        X, Y   = loadData(dir + fileName, mapper, timeSteps, timeShift)
+        X1, Y1 = next(genBatch(X, Y, "test"))
+        outs   = model(X1)
+        outsA  = np.argmax(outs, 1)
+        res    = np.argmax(Y1, 1)
+
+        result = sum(outsA == res)
+
+        print(X1[0][0])
+        print('\n')
+        print(X1[1][0])
+        print('\n')
+
+        
+        
 
         print("epoch: {}, loss: {:.3f}".format(epoch, trainer.previous_minibatch_loss_average))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    for epoch in range(maxEpochs):
-        for X1, Y1 in genBatch(X, Y, "train"):
-            trainer.train_minibatch({input: X1, label: Y1})
-        
-        print("epoch: {}, loss: {:.3f}".format(epoch, trainer.previous_minibatch_loss_average))
-        
-        valError = 0
-        for X1, Y1 in genBatch(X, Y, "val"):
-            valError += trainer.test_minibatch({input: X1, label: Y1})
-        print("Validation - mse: {}".format(valError / len(X["val"])))
 
     generateText(model)
 

@@ -38,6 +38,7 @@ class CharMappings():
 
     def toNum(self, ch):
         return self.charToInt[ch]
+
     def toChar(self, nm):
         return self.intToChar[nm]
 
