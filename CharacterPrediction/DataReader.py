@@ -13,6 +13,7 @@ def generator(batchSize, timeSteps, mapper, dest, dataName):
 
     X = cntk.one_hot(X, mapper.numClasses).eval()
     Y = cntk.one_hot(Y, mapper.numClasses).eval()
+    Y = np.squeeze(Y, 1)
 
     size = len(X)
     while True:
@@ -20,7 +21,7 @@ def generator(batchSize, timeSteps, mapper, dest, dataName):
         start   = rng.randint(0, size)
         end     = start + batchSize
 
-        yield X[start:end], Y[start:end]
+        yield [X[start:end]], [Y[start:end]]
 
 def writeToFile(dest, mapper, length, timeSteps, timeShift, data, dataName):
 

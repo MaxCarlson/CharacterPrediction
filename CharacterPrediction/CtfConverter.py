@@ -52,6 +52,9 @@ class CharMappings():
     def __len__(self):
         return self.samples
 
+# Everything below this line is no longer being used
+# but it is also being saved as a reference for using CTF format in the future
+
 def writeToFile(dest, mapper, length, timeSteps, timeShift, data, setName, featName, labelName):
     
     file = open(dest + '_' + setName + '.ctf', "w+")
@@ -96,3 +99,12 @@ def convertToCTF(filePath, dest, timeSteps, timeShift, lineShape, split = [0.8, 
     writeToFile(dest, mapper, validLen, timeSteps, timeShift, data[trainLen:trainLen+validLen], 'validation', 'X', 'Y')
     writeToFile(dest, mapper, testLen,  timeSteps, timeShift, data[trainLen+validLen: ],        'test',       'X', 'Y')
 
+def createReader(path, isTraining, inputDim, numClasses):
+
+    featureStream = cntk.io.StreamDef(field='X', shape=numClasses, is_sparse=True)
+    labelStream   = cntk.io.StreamDef(field='Y', shape=numClasses, is_sparse=True)
+
+    deserializer = cntk.io.CTFDeserializer(path, cntk.io.StreamDefs(features = featureStream, labels = labelStream))
+
+    return cntk.io.MinibatchSource(deserializer, randomize=isTraining, 
+                                   max_sweeps=cntk.io.INFINITELY_REPEAT if isTraining else 1)
