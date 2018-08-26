@@ -29,6 +29,7 @@ class CharMappings():
                 if c not in self.charToInt and c not in self.exclude: 
                     self.charToInt[c] = i
                     i += 1
+                # TODO: This isn't exactly the correct number of samples, even if time steps is == 1 it's off by 1
                 self.samples += 1
 
         for k, v in self.charToInt.items():

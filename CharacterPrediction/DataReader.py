@@ -3,6 +3,9 @@ import numpy as np
 import random as rng
 from CtfConverter import CharMappings
 
+
+
+
 # TODO: Add support for files too big for memory if needed!
 # TODO: Add in more randomized method of picking than just random start  points
 def generator(batchSize, timeSteps, mapper, dest, dataName):
@@ -11,26 +14,18 @@ def generator(batchSize, timeSteps, mapper, dest, dataName):
     X       = data[:, 0:timeSteps]
     Y       = data[:, timeSteps:]
 
-    X = cntk.one_hot(X, mapper.numClasses).eval()
-    Y = cntk.one_hot(Y, mapper.numClasses).eval()
-    Y = np.squeeze(Y, 1)
+    X       = cntk.one_hot(X, mapper.numClasses).eval()
+    Y       = cntk.one_hot(Y, mapper.numClasses).eval()
+    Y       = np.squeeze(Y, 1)
 
-    size = len(X)
-    idx = 0
+    size    = len(X)
+    idx     = 0
     while True:
-
-
-        # TODO: Need edge checking here!!!!!!!
-        #start   = rng.randint(0, size)
-        #end     = start + batchSize
-
-        # TODO: Get RID of this, just for debugging 
         if idx + batchSize > size:
             idx = 0
 
         yield [X[idx:idx+batchSize]], [Y[idx:idx+batchSize]]
         idx += batchSize
-        #yield [X[start:end]], [Y[start:end]]
 
 def writeToFile(dest, mapper, length, timeSteps, timeShift, data, dataName):
 
