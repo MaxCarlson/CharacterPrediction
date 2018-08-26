@@ -16,12 +16,21 @@ def generator(batchSize, timeSteps, mapper, dest, dataName):
     Y = np.squeeze(Y, 1)
 
     size = len(X)
+    idx = 0
     while True:
-        # TODO: Need edge checking here!!!!!!!
-        start   = rng.randint(0, size)
-        end     = start + batchSize
 
-        yield [X[start:end]], [Y[start:end]]
+
+        # TODO: Need edge checking here!!!!!!!
+        #start   = rng.randint(0, size)
+        #end     = start + batchSize
+
+        # TODO: Get RID of this, just for debugging 
+        if idx + batchSize > size:
+            idx = 0
+
+        yield [X[idx:idx+batchSize]], [Y[idx:idx+batchSize]]
+        idx += batchSize
+        #yield [X[start:end]], [Y[start:end]]
 
 def writeToFile(dest, mapper, length, timeSteps, timeShift, data, dataName):
 

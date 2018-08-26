@@ -4,7 +4,7 @@ import random as rng
 from CtfConverter import CharMappings, convertToCTF
 
 dir         = './text/'
-fileName    = 'Shakespeare.txt'
+fileName    = 'tinyshakespeare.txt'
 
 timeSteps   = 1
 timeShift   = 1 
@@ -21,7 +21,6 @@ def createNetwork(input, layers, numClasses):
     return cntk.layers.Sequential([        
         cntk.layers.For(range(layers), lambda: 
                    cntk.layers.Sequential([cntk.layers.Stabilizer(), cntk.layers.Recurrence(cntk.layers.LSTM(256), go_backwards=False)])),
-        cntk.layers.Dropout(0.15),
         cntk.layers.Dense(numClasses)
     ])
 
