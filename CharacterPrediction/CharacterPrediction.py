@@ -1,61 +1,59 @@
 import cntk
 import numpy as np
+import random as rng
 from CtfConverter import CharMappings, convertToCTF
 
 dir         = './text/'
 fileName    = 'Shakespeare.txt'
 
-timeSteps   = 50
+timeSteps   = 1
 timeShift   = 1 
 outputSize  = 1
+layers      = 2
 
 lr          = 0.035
 batchSize   = 256
-maxEpochs   = 5
+maxEpochs   = 50
 numClasses  = 255
 
-def createNetwork(input, numClasses):
+def createNetwork(input, layers, numClasses):
 
     return cntk.layers.Sequential([        
-        cntk.layers.For(range(10), lambda: 
-                   cntk.layers.Sequential([cntk.layers.Stabilizer(), cntk.layers.Recurrence(cntk.layers.LSTM(128), go_backwards=False)])),
+        cntk.layers.For(range(layers), lambda: 
+                   cntk.layers.Sequential([cntk.layers.Stabilizer(), cntk.layers.Recurrence(cntk.layers.LSTM(256), go_backwards=False)])),
+        cntk.layers.Dropout(0.15),
         cntk.layers.Dense(numClasses)
     ])
 
-    with cntk.layers.default_options(initial_state = 0.1):
-        n = cntk.layers.Recurrence(cntk.layers.LSTM(timeSteps))(input)
-        n = cntk.sequence.last(n)
-        n = cntk.layers.Dropout(0.4)(n)
-        n = cntk.layers.Dense(numClasses)(n)
-        return n
 
-def generateText(net):
+def generateText(net, mapper, length):
 
-    seqLen  = 100
-    seedSeq = 'ENTER: '
+    seed        = rng.randint(0, mapper.numClasses - 1)
+    input       = np.zeros(timeSteps)
 
-    def strToNums(str):
-        lst = []
-        for c in str:
-            lst.append(ord(c))
-        return cntk.one_hot(np.array(lst), numClasses).eval()
+    input[timeSteps - 1]   = seed
 
-    seq         = seedSeq
-    masterSeq   = seedSeq
+    def process(output):
+        return np.argmax(output, axis=2)[0,0]
 
-    for i in range(seqLen):
-        out          = net(strToNums(seq))
-        digit        = np.argmax(out)
-        masterSeq   += chr(digit)
-        seq         += chr(digit)
+    seq = mapper.toChar(seed)
 
-        if len(seq) >= timeSteps:
-            seq = seq[1:]
+    firstSeq = True
 
+    for i in range(length):
+        netIn       = cntk.one_hot(input, mapper.numClasses).eval()
+        arguments   = ([netIn], [firstSeq])
 
-    print('Seed Sequence: {}'.format(seedSeq))
-    print('Output: {}'.format(masterSeq))
-    return
+        netOut  = net.eval(arguments)
+        outNum  = process(netOut)
+
+        seq += mapper.toChar(outNum)
+
+        input       = np.roll(input, -1)
+        input[timeSteps - 1]   = outNum
+        firstSeq    = False
+
+    return seq
 
 from DataReader import loadData
 
@@ -69,29 +67,22 @@ def trainNetwork():
     
 
     #convertToCTF(dir + fileName, './data/Shakespeare', timeSteps, timeShift, (253,5000))
-    mapper, gens = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, True, (253,500))
+    mapper, gens = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, False, (253,500))
 
     #mapper  = CharMappings(loc='./data/Shakespeare', load=True)
 
     # Input with dynamic sequence axis 
-    # consisting of numClasses length one-hot vectors
+    # consisting of a matrix of [steps-in-time X number-of-possible-characters]
     inputSeqAxis = cntk.Axis('inputAxis')
     input   = cntk.sequence.input_variable((timeSteps, mapper.numClasses), sequence_axis=inputSeqAxis, name='input')
 
-    #input   = cntk.sequence.input_variable(mapper.numClasses, name='input')
 
-    model   = createNetwork(input, mapper.numClasses) 
+    model   = createNetwork(input, layers, mapper.numClasses) 
 
-    #label   = cntk.input_variable(mapper.numClasses, dynamic_axes=model.dynamic_axes, name='label') 
     label   = cntk.sequence.input_variable(mapper.numClasses, sequence_axis=inputSeqAxis, name='label') 
 
     z       = model(input)
-
-    #trainingReader  = createReader('./data/Shakespeare_train.ctf', True, timeSteps, mapper.numClasses)
-    #inputMap        = { input: trainingReader.streams.features, label: trainingReader.streams.labels }
-
     loss    = cntk.cross_entropy_with_softmax(z, label) 
-    #error   = cntk.cross_entropy_with_softmax(z, label) 
     error   = cntk.classification_error(z, label)
 
     printer = cntk.logging.ProgressPrinter(tag='Training', num_epochs=maxEpochs)   
@@ -109,11 +100,13 @@ def trainNetwork():
         mask = [True]
         for mb in range(numMinibatch):
             X, Y = next(gens['train'])
-            arguments = ({ z.arguments[0]: X, label: Y }, mask)
+            arguments = ({ input: X, label: Y }, mask)
             mask = [False]
             trainer.train_minibatch(arguments)
 
         trainer.summarize_training_progress()
+        print(generateText(z, mapper, 100))
+
 
     #cntk.train.training_session(
     #    trainer=trainer,
@@ -123,7 +116,7 @@ def trainNetwork():
     #    max_samples=maxEpochs * mapper.samples * 100
     #    ).train()
 
-    generateText(model)
+    #generateText(model)
 
     
 
