@@ -78,15 +78,10 @@ def trainNetwork():
     
     mapper, gens = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, load=True, lineShape=(0,40000))
 
-    datal = open(dir+fileName, "r").readlines()
+    #datal = open(dir+fileName, "r").readlines()
     data = open(dir+fileName, "r").read()
-    mapper2 = CharMappings(datal, './data/Shakespeare')
+    #mapper2 = CharMappings(datal, './data/Shakespeare')
 
-    X1, Y1 = get_data(0, batchSize, data, mapper2)
-    X2, Y2 = next(gens['train'])
-
-    X3 = X1 == X2
-    Y3 = Y1 == Y2
 
     # Input with dynamic sequence axis 
     # consisting of a matrix of [steps-in-time X number-of-possible-characters]
@@ -123,8 +118,8 @@ def trainNetwork():
     for epoch in range(maxEpochs):
         mask = [True]
         for mb in range(numMinibatch):
-            X, Y = next(gens['train'])
-            #X, Y = get_data(mb, batchSize, data, mapper)
+            #X, Y = next(gens['train'])
+            X, Y = get_data(mb, batchSize, data, mapper)
             arguments = ({ input: X, label: Y }, mask)
             mask = [False]
             trainer.train_minibatch(arguments)
