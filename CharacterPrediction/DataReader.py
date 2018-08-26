@@ -25,7 +25,7 @@ def generator(batchSize, timeSteps, mapper, dest, dataName):
             idx = 0
 
         yield [X[idx:idx+batchSize]], [Y[idx:idx+batchSize]]
-        idx += batchSize
+        idx += 1
 
 def writeToFile(dest, mapper, length, timeSteps, timeShift, data, dataName):
 

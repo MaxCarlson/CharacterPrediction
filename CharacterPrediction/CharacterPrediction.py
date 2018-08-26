@@ -13,7 +13,7 @@ outputSize  = 1
 layers      = 2
 
 lr          = 0.035
-batchSize   = 512
+batchSize   = 256
 maxEpochs   = 50
 
 def createNetwork(input, layers, numClasses):
@@ -76,12 +76,7 @@ def get_data(p, minibatch_size, data, mapper):
 #
 def trainNetwork():
     
-    mapper, gens = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, load=True, lineShape=(0,40000))
-
-    #datal = open(dir+fileName, "r").readlines()
-    data = open(dir+fileName, "r").read()
-    #mapper2 = CharMappings(datal, './data/Shakespeare')
-
+    mapper, gens = loadData(dir+fileName, './data/Shakespeare', batchSize, timeSteps, timeShift, load=False, lineShape=(0,40000))
 
     # Input with dynamic sequence axis 
     # consisting of a matrix of [steps-in-time X number-of-possible-characters]
@@ -118,8 +113,8 @@ def trainNetwork():
     for epoch in range(maxEpochs):
         mask = [True]
         for mb in range(numMinibatch):
-            #X, Y = next(gens['train'])
-            X, Y = get_data(mb, batchSize, data, mapper)
+            X, Y = next(gens['train'])
+            #X, Y = get_data(mb, batchSize, data, mapper)
             arguments = ({ input: X, label: Y }, mask)
             mask = [False]
             trainer.train_minibatch(arguments)
